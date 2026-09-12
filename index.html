@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestor de Turno · ATC</title>
+<style>
+  :root{
+    --bg: #12161c;
+    --panel: #1b2129;
+    --panel-2: #212933;
+    --line: #2c3644;
+    --text: #dfe6ee;
+    --text-dim: #8a97a6;
+    --danger: #d8654f;
+    --ok: #5fb88a;
+    --radius: 4px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .mono {
+    font-family: "SF Mono", "Consolas", "Menlo", monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  header {
+    border-bottom: 1px solid var(--line);
+    padding: 18px 24px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  header h1 {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: 0.2px;
+  }
+
+  header .sub {
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+
+  main {
+    max-width: 1360px;
+    margin: 0 auto;
+    padding: 20px 20px 40px;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+  }
+
+  .sidebar {
+    position: sticky;
+    top: 20px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+  }
+
+  .sidebar-hint {
+    font-size: 11.5px;
+    color: var(--text-dim);
+    text-align: center;
+    padding-top: 2px;
+  }
+
+  .main-col {
+    min-width: 0;
+  }
+
+  .main-col .toolbar {
+    margin-bottom: 14px;
+  }
+
+  .intervals-scroll {
+    max-height: calc(100vh - 150px);
+    overflow-y: auto;
+    padding-right: 6px;
+    margin-right: -6px;
+  }
+
+  @media (max-width: 980px) {
+    .layout {
+      grid-template-columns: 1fr;
+    }
+    .sidebar {
+      position: static;
+      max-height: none;
+    }
+    .intervals-scroll {
+      max-height: none;
+      overflow-y: visible;
+    }
+  }
+
+  .config {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    display: flex;
+    gap: 22px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 22px;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .field label {
+    font-size: 11.5px;
+    color: var(--text-dim);
+  }
+
+  .field input,
+  .field select {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    color: var(--text);
+    padding: 7px 9px;
+    font-size: 14px;
+    width: 92px;
+  }
+
+  .field input:focus,
+  .field select:focus {
+    outline: none;
+    border-color: #4f9fd8;
+  }
+
+  button {
+    font-family: inherit;
+    font-size: 13.5px;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    color: var(--text);
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: border-color .12s ease, background .12s ease;
+  }
+  button:hover { border-color: #47566a; background: #26303c; }
+  button:active { transform: translateY(1px); }
+
+  .btn-primary {
+    background: #274a3d;
+    border-color: #3a6b57;
+    color: #c9ecd9;
+    font-weight: 600;
+  }
+  .btn-primary:hover { border-color: var(--ok); }
+
+  .btn-ghost {
+    background: transparent;
+  }
+
+  .btn-danger-outline {
+    border-color: #5a352c;
+    color: #e2a292;
+  }
+  .btn-danger-outline:hover { border-color: var(--danger); }
+
+  .toolbar {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  /* --- Pool de controladores --- */
+  .pool-section {
+    margin-bottom: 26px;
+  }
+
+  .pool-title {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .pool {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 12px;
+    min-height: 56px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    align-items: center;
+  }
+
+  .add-controller {
+    display: flex;
+    gap: 6px;
+  }
+
+  .add-controller input {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    color: var(--text);
+    padding: 5px 8px;
+    font-size: 13px;
+    width: 64px;
+    text-transform: uppercase;
+  }
+
+  .card {
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    cursor: grab;
+    user-select: none;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    border: 1.5px solid;
+  }
+  .card:active { cursor: grabbing; }
+  .card.dragging { opacity: 0.35; }
+
+  .swatch {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.35);
+    position: relative;
+  }
+  .swatch input[type="color"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+    border: none;
+    padding: 0;
+  }
+
+  .card .remove {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--danger);
+    color: #12161c;
+    font-size: 14px;
+    line-height: 22px;
+    text-align: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity .12s ease;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+  .card:hover .remove { opacity: 1; }
+
+  .card-total {
+    font-size: 10.5px;
+    font-weight: 500;
+    opacity: 0.75;
+    font-family: "SF Mono", "Consolas", "Menlo", monospace;
+  }
+
+  .pool-empty {
+    color: var(--text-dim);
+    font-size: 13px;
+    font-style: italic;
+  }
+
+  /* --- Timeline / slider de pasadas --- */
+  .timeline-section {
+    margin-bottom: 26px;
+  }
+
+  .timeline-title {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .timeline-track {
+    position: relative;
+    height: 58px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: visible;
+    user-select: none;
+  }
+
+  .timeline-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 58px;
+    color: var(--text-dim);
+    font-size: 12.5px;
+    font-style: italic;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+  }
+
+  .timeline-segment {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    font-size: 12px;
+    color: var(--text-dim);
+    border-right: 1px solid var(--bg);
+    box-sizing: border-box;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .timeline-segment:nth-child(odd) {
+    background: #323f4d;
+  }
+  .timeline-segment:nth-child(even) {
+    background: #141a21;
+  }
+  .timeline-segment .seg-label {
+    font-family: "SF Mono", "Consolas", "Menlo", monospace;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .seg-badges {
+    display: flex;
+    gap: 4px;
+  }
+  .seg-badges .seg-chip {
+    min-width: 24px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 3px;
+    border: 1.5px solid;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    box-sizing: border-box;
+    line-height: 1;
+  }
+  .seg-badges .seg-chip.empty {
+    background: transparent;
+    border-style: dashed;
+    border-color: #4a5768;
+    color: transparent;
+  }
+
+  .timeline-handle {
+    position: absolute;
+    top: -4px;
+    bottom: -4px;
+    width: 10px;
+    margin-left: -5px;
+    cursor: ew-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+  }
+  .timeline-handle::before {
+    content: '';
+    width: 3px;
+    height: 100%;
+    background: #5b6b7f;
+    border-radius: 2px;
+    transition: background .12s ease;
+  }
+  .timeline-handle:hover::before,
+  .timeline-handle.dragging::before {
+    background: var(--terrestre, #4f9fd8);
+  }
+
+  .timeline-handle .handle-remove {
+    position: absolute;
+    top: -14px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--danger);
+    color: #12161c;
+    font-size: 10px;
+    line-height: 14px;
+    text-align: center;
+    font-weight: 800;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity .12s ease;
+  }
+  .timeline-handle:hover .handle-remove { opacity: 1; }
+
+  .timeline-endpoints {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 5px;
+  }
+
+  /* --- Intervalos --- */
+  .intervals { display: flex; flex-direction: column; gap: 10px; }
+
+  .interval {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: 224px 118px minmax(0, 0.8fr) minmax(0, 0.8fr) 32px;
+    gap: 10px;
+    align-items: center;
+  }
+  .interval:nth-child(odd) {
+    background: #232c37;
+  }
+  .interval:nth-child(even) {
+    background: #161c23;
+  }
+
+  .duration {
+    font-size: 13px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+  }
+
+  .duration .dur-value {
+    text-align: left;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .time-edit {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .time-edit input[type="time"] {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 12.5px;
+    padding: 4px 5px;
+    width: 100px;
+    font-family: "SF Mono", "Consolas", "Menlo", monospace;
+  }
+  .time-edit input[type="time"]:focus {
+    outline: none;
+    border-color: #4f9fd8;
+  }
+  .time-edit .arrow { color: var(--text-dim); font-size: 11px; flex-shrink: 0; }
+
+  .slot {
+    border: 1.5px dashed var(--line);
+    border-radius: var(--radius);
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    gap: 6px;
+    min-width: 0;
+    transition: border-color .12s ease, background .12s ease;
+  }
+
+  .slot .slot-label {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    width: 28px;
+  }
+
+  .slot.filled {
+    border-style: solid;
+  }
+
+  .slot.over {
+    border-color: var(--ok) !important;
+    background: #1b2e24 !important;
+  }
+
+  .slot.blocked {
+    border-color: var(--danger) !important;
+    background: #2e1c1c !important;
+    animation: shake 0.32s ease;
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-3px); }
+    75% { transform: translateX(3px); }
+  }
+
+  .slot .placeholder {
+    color: #4a5768;
+    font-size: 12.5px;
+  }
+
+  .interval .del-row {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-size: 16px;
+    cursor: pointer;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+  }
+  .interval .del-row:hover { background: #2a1d1a; color: var(--danger); }
+
+  .empty-state {
+    text-align: center;
+    color: var(--text-dim);
+    padding: 40px 0;
+    font-size: 14px;
+    border: 1px dashed var(--line);
+    border-radius: var(--radius);
+  }
+
+  .local-hint {
+    font-size: 10.5px;
+    color: var(--text-dim);
+    opacity: 0.75;
+    font-family: "SF Mono", "Consolas", "Menlo", monospace;
+    margin-top: 3px;
+  }
+
+  @media (max-width: 660px) {
+    .interval { grid-template-columns: 1fr; }
+    .time-edit { padding-bottom: 4px; }
+    .duration { padding-bottom: 4px; }
+    .interval .del-row { justify-self: end; }
+  }
+  .print-area {
+    display: none;
+  }
+
+  .print-area h1 {
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 22px;
+    color: #000;
+    margin: 0 0 2px;
+  }
+
+  .print-area .print-sub {
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 13px;
+    color: #333;
+    margin: 0 0 22px;
+  }
+
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: "SF Mono", "Consolas", "Menlo", monospace;
+  }
+
+  .print-table th,
+  .print-table td {
+    border: 2px solid #000;
+    padding: 16px 10px;
+    text-align: center;
+    font-size: 34px;
+    font-weight: 700;
+    color: #000;
+  }
+
+  .print-table th {
+    font-size: 18px;
+    background: #eaeaea;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  @media print {
+    header, main {
+      display: none !important;
+    }
+    .print-area {
+      display: block !important;
+      background: #fff;
+      padding: 10px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Gestor de Turno</h1>
+  <div class="sub">Torre · Posiciones LCL / GND</div>
+</header>
+
+<main>
+
+  <div class="config">
+    <div class="field">
+      <label for="startTime">Inicio del turno (UTC)</label>
+      <input type="time" id="startTime" value="08:30">
+      <div class="local-hint" id="startLocalHint"></div>
+    </div>
+    <div class="field">
+      <label for="fccvTime">FCCV (UTC)</label>
+      <input type="time" id="fccvTime">
+      <div class="local-hint" id="fccvLocalHint"></div>
+    </div>
+    <div class="field">
+      <label for="duration">Duración pasada (min)</label>
+      <select id="duration">
+        <option value="60">60</option>
+        <option value="90">90</option>
+        <option value="120" selected>120</option>
+      </select>
+    </div>
+    <button class="btn-primary" id="generateBtn">Generar pasadas</button>
+    <button class="btn-danger-outline" id="resetBtn">Reiniciar turno</button>
+    <button class="btn-ghost" id="printBtn">Imprimir</button>
+  </div>
+
+  <div class="timeline-section">
+    <div class="timeline-title">
+      <span>Línea de tiempo del turno</span>
+      <button class="btn-ghost" id="addDividerBtn">+ Agregar divisor</button>
+    </div>
+    <div id="timelineTrack"></div>
+    <div class="timeline-endpoints">
+      <span id="timelineStartLabel"></span>
+      <span id="timelineEndLabel"></span>
+    </div>
+  </div>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="pool-title">
+        <span>Pool de controladores</span>
+        <div class="add-controller">
+          <input type="text" id="newInitials" maxlength="3" placeholder="INI">
+          <button class="btn-ghost" id="addControllerBtn">+ Agregar</button>
+        </div>
+      </div>
+      <div class="pool" id="pool"></div>
+      <div class="sidebar-hint">Arrastra una tarjeta hacia una pasada →</div>
+    </aside>
+
+    <div class="main-col">
+      <div class="intervals-scroll">
+        <div class="intervals" id="intervals"></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<div class="print-area" id="printArea"></div>
+
+<script>
+(function () {
+  const DEFAULT_PALETTE = ['#e0a542', '#4f9fd8', '#8a6fd8', '#5fb88a', '#d8654f', '#d84f9e', '#4fd8c0', '#c9c04f'];
+
+  const state = {
+    controllers: [
+      { initials: 'IGC', color: DEFAULT_PALETTE[0] },
+      { initials: 'MRP', color: DEFAULT_PALETTE[1] },
+      { initials: 'SLV', color: DEFAULT_PALETTE[2] },
+      { initials: 'TCA', color: DEFAULT_PALETTE[3] }
+    ],
+    intervals: [], // { id, startMin, endMin, local: initials|null, terrestre: initials|null }
+    nextId: 1
+  };
+
+  const poolEl = document.getElementById('pool');
+  const intervalsEl = document.getElementById('intervals');
+  const startTimeInput = document.getElementById('startTime');
+  const fccvTimeInput = document.getElementById('fccvTime');
+  const durationInput = document.getElementById('duration');
+
+  function toMin(hhmm) {
+    if (!hhmm) return null;
+    const [h, m] = hhmm.split(':').map(Number);
+    return h * 60 + m;
+  }
+
+  function toHHMM(min) {
+    min = ((min % 1440) + 1440) % 1440;
+    const h = Math.floor(min / 60).toString().padStart(2, '0');
+    const m = (min % 60).toString().padStart(2, '0');
+    return `${h}:${m}`;
+  }
+
+  // Las horas de la app se ingresan y manejan en UTC. Estas funciones calculan
+  // la hora local equivalente (America/Santiago) sólo como referencia visual.
+  function minutesToLocalHHMM(absMin) {
+    const now = new Date();
+    const baseUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0);
+    const d = new Date(baseUTC + absMin * 60000);
+    return d.toLocaleTimeString('es-CL', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'America/Santiago'
+    });
+  }
+
+  function localHintText(startMin, endMin) {
+    if (endMin === undefined) return `hora local: ${minutesToLocalHHMM(startMin)}`;
+    return `hora local: ${minutesToLocalHHMM(startMin)} → ${minutesToLocalHHMM(endMin)}`;
+  }
+
+  const startLocalHint = document.getElementById('startLocalHint');
+  const fccvLocalHint = document.getElementById('fccvLocalHint');
+
+  function updateConfigLocalHints() {
+    const s = toMin(startTimeInput.value);
+    startLocalHint.textContent = s !== null ? minutesToLocalHHMM(s) + ' local' : '';
+    const f = toMin(fccvTimeInput.value);
+    fccvLocalHint.textContent = f !== null ? minutesToLocalHHMM(f) + ' local' : '';
+  }
+
+  startTimeInput.addEventListener('input', updateConfigLocalHints);
+  updateConfigLocalHints();
+
+  function hexToRgba(hex, alpha) {
+    const h = hex.replace('#', '');
+    const r = parseInt(h.substring(0, 2), 16);
+    const g = parseInt(h.substring(2, 4), 16);
+    const b = parseInt(h.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
+  function getController(initials) {
+    return state.controllers.find(c => c.initials === initials);
+  }
+
+  function nextPaletteColor() {
+    const used = state.controllers.map(c => c.color);
+    const free = DEFAULT_PALETTE.find(c => !used.includes(c));
+    return free || DEFAULT_PALETTE[state.controllers.length % DEFAULT_PALETTE.length];
+  }
+
+  // -------- Pool rendering --------
+  function computeControllerMinutes(initials) {
+    let total = 0;
+    state.intervals.forEach(iv => {
+      if (iv.local === initials) total += (iv.endMin - iv.startMin);
+      if (iv.terrestre === initials) total += (iv.endMin - iv.startMin);
+    });
+    return total;
+  }
+
+  function renderPool() {
+    poolEl.innerHTML = '';
+    if (state.controllers.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'pool-empty';
+      empty.textContent = 'Sin controladores en la pool. Agrega iniciales arriba.';
+      poolEl.appendChild(empty);
+      return;
+    }
+    state.controllers.forEach(c => {
+      poolEl.appendChild(makeCard(c.initials, { removable: true, colorEditable: true, showTotal: true }));
+    });
+  }
+
+  function makeCard(initials, opts) {
+    opts = opts || {};
+    const c = getController(initials) || { initials, color: '#6b7683' };
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.draggable = true;
+    card.dataset.initials = initials;
+    card.style.borderColor = c.color;
+    card.style.background = hexToRgba(c.color, 0.16);
+    card.style.color = c.color;
+
+    if (opts.colorEditable) {
+      const swatch = document.createElement('span');
+      swatch.className = 'swatch';
+      swatch.style.background = c.color;
+      swatch.draggable = false;
+      const colorInput = document.createElement('input');
+      colorInput.type = 'color';
+      colorInput.value = c.color;
+      colorInput.addEventListener('click', e => e.stopPropagation());
+      colorInput.addEventListener('input', e => {
+        c.color = e.target.value;
+        renderPool();
+        renderIntervals();
+      });
+      swatch.appendChild(colorInput);
+      swatch.addEventListener('mousedown', e => e.stopPropagation());
+      card.appendChild(swatch);
+    }
+
+    const label = document.createElement('span');
+    label.textContent = initials;
+    card.appendChild(label);
+
+    if (opts.showTotal) {
+      const totalMin = computeControllerMinutes(initials);
+      if (totalMin > 0) {
+        const totalEl = document.createElement('span');
+        totalEl.className = 'card-total';
+        totalEl.textContent = formatDuration(totalMin);
+        card.appendChild(totalEl);
+      }
+    }
+
+    card.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', initials);
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => card.classList.add('dragging'), 0);
+    });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+
+    if (opts.removable) {
+      const rm = document.createElement('span');
+      rm.className = 'remove';
+      rm.textContent = '×';
+      rm.title = 'Quitar de la pool';
+      rm.draggable = false;
+      rm.addEventListener('mousedown', e => e.stopPropagation());
+      rm.addEventListener('click', (e) => {
+        e.stopPropagation();
+        state.controllers = state.controllers.filter(x => x.initials !== initials);
+        renderPool();
+      });
+      card.appendChild(rm);
+    }
+    return card;
+  }
+
+  document.getElementById('addControllerBtn').addEventListener('click', addController);
+  document.getElementById('newInitials').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addController();
+  });
+
+  function addController() {
+    const input = document.getElementById('newInitials');
+    const val = input.value.trim().toUpperCase().slice(0, 3);
+    if (!val) return;
+    if (!getController(val)) {
+      state.controllers.push({ initials: val, color: nextPaletteColor() });
+      renderPool();
+    }
+    input.value = '';
+    input.focus();
+  }
+
+  // -------- Intervals --------
+  document.getElementById('generateBtn').addEventListener('click', generateIntervals);
+  document.getElementById('resetBtn').addEventListener('click', resetShift);
+
+  document.getElementById('printBtn').addEventListener('click', () => {
+    buildPrintView();
+    window.print();
+  });
+
+  function buildPrintView() {
+    const area = document.getElementById('printArea');
+    area.innerHTML = '';
+
+    const title = document.createElement('h1');
+    title.textContent = 'Rotación de turno';
+    area.appendChild(title);
+
+    const sub = document.createElement('div');
+    sub.className = 'print-sub';
+    sub.textContent = 'Horarios en UTC';
+    area.appendChild(sub);
+
+    if (state.intervals.length === 0) {
+      const p = document.createElement('p');
+      p.textContent = 'No hay pasadas generadas.';
+      area.appendChild(p);
+      return;
+    }
+
+    const table = document.createElement('table');
+    table.className = 'print-table';
+
+    const thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th>Entrada</th><th>Salida</th><th>LCL</th><th>GND</th></tr>';
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    state.intervals.forEach(iv => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${toHHMM(iv.startMin)}</td><td>${toHHMM(iv.endMin)}</td><td>${iv.local || '—'}</td><td>${iv.terrestre || '—'}</td>`;
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+
+    area.appendChild(table);
+  }
+
+  function generateIntervals() {
+    const start = toMin(startTimeInput.value);
+    const fccv = toMin(fccvTimeInput.value);
+    const dur = parseInt(durationInput.value, 10);
+
+    if (start === null || fccv === null) {
+      alert('Ingresa la hora de inicio y el FCCV.');
+      return;
+    }
+    if (!dur || dur <= 0) {
+      alert('Ingresa una duración de pasada válida.');
+      return;
+    }
+
+    let end = fccv;
+    if (end <= start) end += 1440; // el fccv cae al día siguiente
+
+    state.intervals = [];
+    let cursor = start;
+    while (cursor < end) {
+      const next = Math.min(cursor + dur, end);
+      state.intervals.push({
+        id: state.nextId++,
+        startMin: cursor,
+        endMin: next,
+        local: null,
+        terrestre: null
+      });
+      cursor = next;
+    }
+
+    renderIntervals();
+  }
+
+  function resetShift() {
+    const keepFccv = fccvTimeInput.value;
+    state.intervals = [];
+    renderIntervals();
+    fccvTimeInput.value = keepFccv;
+  }
+
+  function syncFccv() {
+    if (fccvTimeInput.value) return; // no pisar un FCCV ya definido por el usuario
+    if (state.intervals.length === 0) return;
+    const last = state.intervals[state.intervals.length - 1];
+    fccvTimeInput.value = toHHMM(last.endMin);
+  }
+
+  // Referencias a los inputs/elementos de cada fila, para poder actualizarlos
+  // en vivo durante el arrastre del timeline sin reconstruir el DOM.
+  const rowRefs = new Map();
+  function getRowRef(id) {
+    if (!rowRefs.has(id)) rowRefs.set(id, {});
+    return rowRefs.get(id);
+  }
+  function updateRowDisplay(iv) {
+    const ref = rowRefs.get(iv.id);
+    if (!ref) return;
+    if (ref.startInput) ref.startInput.value = toHHMM(iv.startMin);
+    if (ref.endInput) ref.endInput.value = toHHMM(iv.endMin);
+    if (ref.durEl) ref.durEl.textContent = formatDuration(Math.max(0, iv.endMin - iv.startMin));
+    if (ref.localHintEl) ref.localHintEl.textContent = localHintText(iv.startMin, iv.endMin);
+  }
+
+  fccvTimeInput.addEventListener('input', () => {
+    renderTimeline();
+    updateConfigLocalHints();
+  });
+
+  // -------- Timeline / slider de pasadas --------
+  const timelineTrackEl = document.getElementById('timelineTrack');
+  const timelineStartLabel = document.getElementById('timelineStartLabel');
+  const timelineEndLabel = document.getElementById('timelineEndLabel');
+  const MIN_GAP = 10; // minutos mínimos por pasada al arrastrar/dividir
+
+  function getTimelineRange(fallbackStart) {
+    const start = state.intervals.length > 0 ? state.intervals[0].startMin : fallbackStart;
+    if (start === null || start === undefined) return null;
+    const fccv = toMin(fccvTimeInput.value);
+    if (fccv === null) {
+      return state.intervals.length > 0
+        ? { start, end: state.intervals[state.intervals.length - 1].endMin }
+        : null;
+    }
+    let end = fccv + Math.floor(start / 1440) * 1440;
+    if (end <= start) end += 1440;
+    return { start, end };
+  }
+
+  function makeSegBadges(iv) {
+    const wrap = document.createElement('div');
+    wrap.className = 'seg-badges';
+    ['local', 'terrestre'].forEach(key => {
+      const chip = document.createElement('span');
+      const initials = iv[key];
+      if (initials) {
+        const c = getController(initials);
+        const color = c ? c.color : '#6b7683';
+        chip.className = 'seg-chip';
+        chip.style.borderColor = color;
+        chip.style.background = hexToRgba(color, 0.22);
+        chip.style.color = color;
+        chip.textContent = initials;
+        chip.title = `${key === 'local' ? 'LCL' : 'GND'}: ${initials}`;
+      } else {
+        chip.className = 'seg-chip empty';
+        chip.textContent = '·';
+      }
+      wrap.appendChild(chip);
+    });
+    return wrap;
+  }
+
+  function layoutTimeline(range, total, segEls, handleEls) {
+    state.intervals.forEach((iv, idx) => {
+      const seg = segEls[idx];
+      if (!seg) return;
+      seg.style.left = ((iv.startMin - range.start) / total) * 100 + '%';
+      seg.style.width = ((iv.endMin - iv.startMin) / total) * 100 + '%';
+      const labelEl = seg.querySelector('.seg-label');
+      if (labelEl) labelEl.textContent = formatDuration(Math.max(0, iv.endMin - iv.startMin));
+    });
+    handleEls.forEach((handle, i) => {
+      const iv = state.intervals[i];
+      if (!iv) return;
+      handle.style.left = ((iv.endMin - range.start) / total) * 100 + '%';
+    });
+  }
+
+  function renderTimeline() {
+    timelineTrackEl.innerHTML = '';
+
+    if (state.intervals.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'timeline-empty';
+      empty.textContent = 'Genera o agrega una pasada para ver la línea de tiempo.';
+      timelineTrackEl.appendChild(empty);
+      timelineStartLabel.textContent = '';
+      timelineEndLabel.textContent = '';
+      return;
+    }
+
+    const range = getTimelineRange();
+    const total = range.end - range.start;
+    timelineStartLabel.innerHTML = `${toHHMM(range.start)} <span class="local-hint" style="display:inline;margin:0;">(${minutesToLocalHHMM(range.start)} local)</span>`;
+    timelineEndLabel.innerHTML = `${toHHMM(range.end)} (FCCV) <span class="local-hint" style="display:inline;margin:0;">(${minutesToLocalHHMM(range.end)} local)</span>`;
+
+    if (total <= 0) {
+      const empty = document.createElement('div');
+      empty.className = 'timeline-empty';
+      empty.textContent = 'El FCCV es anterior al inicio del turno — revisa las horas.';
+      timelineTrackEl.appendChild(empty);
+      return;
+    }
+
+    const track = document.createElement('div');
+    track.className = 'timeline-track';
+
+    const segEls = state.intervals.map(iv => {
+      const seg = document.createElement('div');
+      seg.className = 'timeline-segment';
+      const label = document.createElement('span');
+      label.className = 'seg-label';
+      label.textContent = formatDuration(Math.max(0, iv.endMin - iv.startMin));
+      seg.appendChild(label);
+      seg.appendChild(makeSegBadges(iv));
+      track.appendChild(seg);
+      return seg;
+    });
+
+    const handleEls = [];
+    for (let i = 0; i < state.intervals.length - 1; i++) {
+      const handle = makeTimelineHandle(i, range, total, segEls, handleEls);
+      handleEls.push(handle);
+      track.appendChild(handle);
+    }
+
+    layoutTimeline(range, total, segEls, handleEls);
+    timelineTrackEl.appendChild(track);
+  }
+
+  function makeTimelineHandle(i, range, total, segEls, handleEls) {
+    const handle = document.createElement('div');
+    handle.className = 'timeline-handle';
+
+    const rm = document.createElement('div');
+    rm.className = 'handle-remove';
+    rm.textContent = '×';
+    rm.title = 'Fusionar con la siguiente pasada';
+    rm.addEventListener('pointerdown', e => e.stopPropagation());
+    rm.addEventListener('click', e => {
+      e.stopPropagation();
+      const iv = state.intervals[i];
+      const nextIv = state.intervals[i + 1];
+      iv.endMin = nextIv.endMin;
+      iv.local = iv.local || nextIv.local;
+      iv.terrestre = iv.terrestre || nextIv.terrestre;
+      state.intervals.splice(i + 1, 1);
+      renderIntervals();
+    });
+    handle.appendChild(rm);
+
+    handle.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      const iv = state.intervals[i];
+      const nextIv = state.intervals[i + 1];
+      if (!iv || !nextIv) return;
+
+      handle.classList.add('dragging');
+      const track = timelineTrackEl.querySelector('.timeline-track');
+      const rect = track.getBoundingClientRect();
+      handle.setPointerCapture(e.pointerId);
+
+      const lowerBound = iv.startMin + MIN_GAP;
+      const upperBound = nextIv.endMin - MIN_GAP;
+
+      function onMove(ev) {
+        const x = Math.min(Math.max(ev.clientX - rect.left, 0), rect.width);
+        const rawMin = range.start + (x / rect.width) * total;
+        let snapped = Math.round(rawMin / 5) * 5;
+        snapped = Math.min(Math.max(snapped, lowerBound), upperBound);
+        iv.endMin = snapped;
+        nextIv.startMin = snapped;
+
+        // Reflejo en vivo: mueve el timeline y actualiza las filas de abajo
+        // sin reconstruir el DOM (así no se pierde el arrastre en curso).
+        layoutTimeline(range, total, segEls, handleEls);
+        updateRowDisplay(iv);
+        updateRowDisplay(nextIv);
+      }
+      function onUp() {
+        handle.classList.remove('dragging');
+        handle.removeEventListener('pointermove', onMove);
+        handle.removeEventListener('pointerup', onUp);
+        renderIntervals();
+      }
+      handle.addEventListener('pointermove', onMove);
+      handle.addEventListener('pointerup', onUp);
+    });
+
+    return handle;
+  }
+
+  document.getElementById('addDividerBtn').addEventListener('click', () => {
+    if (state.intervals.length === 0) {
+      alert('Genera o agrega al menos una pasada primero.');
+      return;
+    }
+    let biggestIdx = 0;
+    let biggestDur = -1;
+    state.intervals.forEach((iv, idx) => {
+      const dur = iv.endMin - iv.startMin;
+      if (dur > biggestDur) { biggestDur = dur; biggestIdx = idx; }
+    });
+    if (biggestDur < MIN_GAP * 2) {
+      alert('Las pasadas actuales son muy cortas para dividir. Ajusta manualmente si necesitas más precisión.');
+      return;
+    }
+    const target = state.intervals[biggestIdx];
+    let mid = Math.round((target.startMin + target.endMin) / 2 / 5) * 5;
+    mid = Math.min(Math.max(mid, target.startMin + MIN_GAP), target.endMin - MIN_GAP);
+
+    const newIv = {
+      id: state.nextId++,
+      startMin: mid,
+      endMin: target.endMin,
+      local: null,
+      terrestre: null
+    };
+    target.endMin = mid;
+    state.intervals.splice(biggestIdx + 1, 0, newIv);
+    renderIntervals();
+  });
+
+  function renderIntervals() {
+    intervalsEl.innerHTML = '';
+    rowRefs.clear();
+
+    if (state.intervals.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'Sin pasadas generadas. Define el FCCV y la duración, y genera el turno.';
+      intervalsEl.appendChild(empty);
+      renderTimeline();
+      renderPool();
+      return;
+    }
+
+    state.intervals.forEach(iv => {
+      intervalsEl.appendChild(renderInterval(iv));
+    });
+
+    syncFccv();
+    renderTimeline();
+    renderPool();
+  }
+
+  function renderInterval(iv) {
+    const row = document.createElement('div');
+    row.className = 'interval';
+    row.dataset.id = iv.id;
+
+    row.appendChild(makeTimeEdit(iv));
+    row.appendChild(makeDuration(iv));
+    row.appendChild(makeSlot(iv, 'local', 'LCL'));
+    row.appendChild(makeSlot(iv, 'terrestre', 'GND'));
+
+    const del = document.createElement('button');
+    del.className = 'del-row';
+    del.title = 'Borrar pasada';
+    del.textContent = '×';
+    del.addEventListener('click', () => {
+      state.intervals = state.intervals.filter(x => x.id !== iv.id);
+      renderIntervals();
+    });
+    row.appendChild(del);
+
+    return row;
+  }
+
+  function propagateEndChange(iv) {
+    const idx = state.intervals.indexOf(iv);
+    const next = state.intervals[idx + 1];
+    if (next) next.startMin = iv.endMin;
+  }
+
+  function propagateStartChange(iv) {
+    const idx = state.intervals.indexOf(iv);
+    const prev = state.intervals[idx - 1];
+    if (prev) prev.endMin = iv.startMin;
+  }
+
+  function makeTimeEdit(iv) {
+    const outer = document.createElement('div');
+
+    const wrap = document.createElement('div');
+    wrap.className = 'time-edit mono';
+
+    const dayBase = Math.floor(iv.startMin / 1440) * 1440;
+
+    const startInput = document.createElement('input');
+    startInput.type = 'time';
+    startInput.value = toHHMM(iv.startMin);
+    startInput.addEventListener('change', () => {
+      const v = toMin(startInput.value);
+      if (v === null) return;
+      iv.startMin = dayBase + v;
+      propagateStartChange(iv);
+      renderIntervals();
+    });
+
+    const arrow = document.createElement('span');
+    arrow.className = 'arrow';
+    arrow.textContent = '→';
+
+    const endDayBase = Math.floor(iv.endMin / 1440) * 1440;
+    const endInput = document.createElement('input');
+    endInput.type = 'time';
+    endInput.value = toHHMM(iv.endMin);
+    endInput.addEventListener('change', () => {
+      const v = toMin(endInput.value);
+      if (v === null) return;
+      iv.endMin = endDayBase + v;
+      propagateEndChange(iv);
+      renderIntervals();
+    });
+
+    wrap.appendChild(startInput);
+    wrap.appendChild(arrow);
+    wrap.appendChild(endInput);
+    outer.appendChild(wrap);
+
+    const localHintEl = document.createElement('div');
+    localHintEl.className = 'local-hint';
+    localHintEl.textContent = localHintText(iv.startMin, iv.endMin);
+    outer.appendChild(localHintEl);
+
+    const ref = getRowRef(iv.id);
+    ref.startInput = startInput;
+    ref.endInput = endInput;
+    ref.localHintEl = localHintEl;
+
+    return outer;
+  }
+
+  function formatDuration(mins) {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    if (h === 0) return `${m}min`;
+    if (m === 0) return `${h}h`;
+    return `${h}h${m.toString().padStart(2, '0')}`;
+  }
+
+  function makeDuration(iv) {
+    const el = document.createElement('div');
+    el.className = 'duration mono';
+
+    const value = document.createElement('span');
+    value.className = 'dur-value';
+    value.textContent = formatDuration(Math.max(0, iv.endMin - iv.startMin));
+
+    el.appendChild(value);
+
+    getRowRef(iv.id).durEl = value;
+
+    return el;
+  }
+
+  function flashSlot(slot) {
+    slot.classList.add('blocked');
+    setTimeout(() => slot.classList.remove('blocked'), 420);
+  }
+
+  function makeSlot(iv, key, labelText) {
+    const slot = document.createElement('div');
+    slot.className = `slot ${key}` + (iv[key] ? ' filled' : '');
+
+    const label = document.createElement('div');
+    label.className = 'slot-label';
+    label.textContent = labelText;
+    slot.appendChild(label);
+
+    if (iv[key]) {
+      const card = makeCard(iv[key], { removable: true, colorEditable: false });
+      card.addEventListener('dragstart', e => {
+        e.dataTransfer.setData('application/x-source', JSON.stringify({ intervalId: iv.id, key }));
+      });
+      // override remove to clear from this slot instead of the pool
+      const rm = card.querySelector('.remove');
+      if (rm) {
+        const newRm = rm.cloneNode(true);
+        rm.parentNode.replaceChild(newRm, rm);
+        newRm.addEventListener('mousedown', e => e.stopPropagation());
+        newRm.addEventListener('click', (e) => {
+          e.stopPropagation();
+          iv[key] = null;
+          renderIntervals();
+        });
+      }
+      slot.appendChild(card);
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'placeholder';
+      ph.textContent = 'Arrastra aquí';
+      slot.appendChild(ph);
+    }
+
+    slot.addEventListener('dragover', e => {
+      e.preventDefault();
+      slot.classList.add('over');
+    });
+    slot.addEventListener('dragleave', () => slot.classList.remove('over'));
+    slot.addEventListener('drop', e => {
+      e.preventDefault();
+      slot.classList.remove('over');
+      const initials = e.dataTransfer.getData('text/plain');
+      if (!initials) return;
+
+      const otherKey = key === 'local' ? 'terrestre' : 'local';
+      if (iv[otherKey] === initials) {
+        flashSlot(slot);
+        return;
+      }
+
+      const sourceRaw = e.dataTransfer.getData('application/x-source');
+      if (sourceRaw) {
+        const source = JSON.parse(sourceRaw);
+        const sourceIv = state.intervals.find(x => x.id === source.intervalId);
+        if (sourceIv) sourceIv[source.key] = null;
+      }
+
+      iv[key] = initials;
+      renderIntervals();
+    });
+
+    return slot;
+  }
+
+  renderPool();
+  renderIntervals();
+})();
+</script>
+
+</body>
+</html>
